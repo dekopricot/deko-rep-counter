@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14181c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>レップカウンター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Noto+Sans+JP:wght@400;600&display=swap">
+<style>
+/* Layout: 1画面の操作パネル。上=メニュー、中央=巨大な回数、下=親指で押せる大ボタン */
+:root{
+  --bg:#f3f4f2; --panel:#ffffff; --fg:#1b2024; --muted:#68717a; --line:#d9ddd8;
+  --accent:#0f7a5c; --accent-fg:#ffffff; --warn:#b5521b; --count:#0f7a5c;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Noto Sans JP",system-ui,-apple-system,"Hiragino Sans",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#14181c; --panel:#1d2328; --fg:#eef1ee; --muted:#9aa4ac; --line:#2e363d;
+  --accent:#3fcf9e; --accent-fg:#06281d; --warn:#f08a4b; --count:#5be0b0; color-scheme:dark;}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) max(16px,env(safe-area-inset-left,0px));
+  -webkit-tap-highlight-color:transparent}
+.app{max-width:480px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:14px;padding-block:12px 20px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font:700 22px/1 var(--display);letter-spacing:.04em;margin:0;text-transform:uppercase}
+.iconbtn{background:none;border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:6px 10px;font:inherit;font-size:13px}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tabs button{border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:10px;padding:8px 0;font:700 17px var(--display);letter-spacing:.05em}
+.tabs button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+select,input{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+.ex{display:flex;flex-direction:column;gap:6px}
+.meta{display:flex;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--muted)}
+.chip{border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--panel)}
+.chip.mount{color:var(--fg);font-weight:600}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.weight{display:grid;grid-template-columns:52px 1fr 52px;gap:8px;align-items:center}
+.weight button{height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:700 22px var(--display)}
+.weight output{text-align:center;font:700 26px var(--display);font-variant-numeric:tabular-nums}
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:220px;
+  background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;user-select:none}
+.big{font:700 clamp(110px,38vw,180px)/.9 var(--display);color:var(--count);font-variant-numeric:tabular-nums}
+.big.idle{color:var(--muted)}
+.sub{font:600 18px var(--display);letter-spacing:.06em;color:var(--muted);font-variant-numeric:tabular-nums;text-align:center}
+.bar{width:100%;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}
+.status{font-size:13px;color:var(--warn);text-align:center;min-height:1.4em;margin:0}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.controls button{height:52px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:700 20px var(--display);letter-spacing:.04em}
+.primary{grid-column:1/-1;height:68px!important;background:var(--accent)!important;color:var(--accent-fg)!important;border:0!important;font-size:26px!important}
+.primary.stop{background:var(--fg)!important;color:var(--bg)!important}
+section.log{display:flex;flex-direction:column;gap:8px}
+.loghead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.loghead h2{font:700 18px var(--display);letter-spacing:.05em;margin:0;text-transform:uppercase}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:400}
+.tablewrap{overflow-x:auto}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--fg);width:min(440px,calc(100% - 32px));padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog form{display:flex;flex-direction:column;gap:10px}
+dialog label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+dialog .row{display:flex;gap:8px;justify-content:flex-end}
+dialog .row button{padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:inherit}
+dialog .row button.ok{background:var(--accent);color:var(--accent-fg);border:0}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Rep Counter</h1>
+    <button class="iconbtn" id="settingsBtn" type="button">送信先の設定</button>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="メニュー"></nav>
+
+  <div class="ex">
+    <select id="exSelect" aria-label="種目"></select>
+    <div class="meta" id="meta"></div>
+    <p class="hint" id="hint"></p>
+  </div>
+
+  <div class="weight" id="weightRow">
+    <button type="button" id="wMinus" aria-label="2.5kg減らす">−</button>
+    <output id="wOut">0.0 kg</output>
+    <button type="button" id="wPlus" aria-label="2.5kg増やす">＋</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="big idle" id="big">0</div>
+    <div class="sub" id="sub">目標 12 回</div>
+    <div class="bar" aria-hidden="true"><i id="angleBar"></i></div>
+  </div>
+  <p class="status" id="status" role="status"></p>
+
+  <div class="controls">
+    <button type="button" class="primary" id="mainBtn">START</button>
+    <button type="button" id="minusBtn">−1 回</button>
+    <button type="button" id="plusBtn">＋1 回</button>
+  </div>
+
+  <section class="log">
+    <div class="loghead">
+      <h2>Today</h2>
+      <button class="iconbtn" id="sendBtn" type="button">送信</button>
+    </div>
+    <p class="hint" id="unsent"></p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>時刻</th><th>種目</th><th>セット</th><th>kg</th><th>回/秒</th></tr></thead>
+      <tbody id="logBody"></tbody>
+    </table></div>
+  </section>
+</div>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <strong>送信先(Googleスプレッドシート)</strong>
+    <label>Apps Script のウェブアプリURL
+      <input id="gasUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <label>TOKEN(Apps Scriptと同じ文字列)
+      <input id="gasToken" type="text" autocomplete="off"></label>
+    <label style="flex-direction:row;align-items:center;gap:8px;color:var(--fg)">
+      <input id="autoSend" type="checkbox" style="width:auto"> セットを保存するたびに自動で送る</label>
+    <p class="hint">この設定はこのスマホの中だけに保存されます。</p>
+    <div class="row"><button value="cancel" type="submit">閉じる</button><button class="ok" value="save" type="submit" id="saveSettings">保存</button></div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+// ---------- 種目(本体版 Exercises.h と同じ code を使う) ----------
+const MENUS=[{code:"gym_a",label:"GYM-A"},{code:"gym_b",label:"GYM-B"},{code:"home",label:"HOME"}];
+const MOUNT={FOOT:"足の甲",THIGH:"太もも",POCKET:"ポケット",NONE:"どこでも"};
+// [menu, code, 名前, 付ける場所, 種類, 片脚, 最小角度, 初期kg, 目標, ヒント]
+const EX=[
+ [0,"calf_towel","カーフレイズ(タオル)","FOOT","reps",1,8,0,12,"スマホを靴ひもの上に固定。つま先の下にタオル。3秒上げ・2秒止め・3秒下ろす"],
+ [0,"calf_seated","座ってカーフレイズ","FOOT","reps",0,8,20,15,"スマホを足の甲に固定。膝の上に重り"],
+ [0,"bulgarian","ブルガリアンスクワット","THIGH","reps",1,20,10,10,"前脚の太もも(膝の少し上)に固定"],
+ [0,"hip_thrust","ヒップスラスト","THIGH","reps",0,15,40,10,"太ももの前に固定。腰を下ろした姿勢でスタート"],
+ [0,"sl_rdl","片脚ルーマニアンデッドリフト","THIGH","reps",1,20,10,8,"後ろに上げる脚の太ももに固定"],
+ [0,"short_foot","ショートフット","NONE","timer",0,0,0,60,"秒数だけ記録"],
+ [1,"squat","スクワット","THIGH","reps",0,20,40,8,"太もも(膝の少し上)に固定"],
+ [1,"step_up","ステップアップ","THIGH","reps",1,20,10,10,"上がる脚の太ももに固定"],
+ [1,"side_plank","サイドプランク","NONE","timer",1,0,0,30,"秒数だけ記録"],
+ [1,"plank","プランク","NONE","timer",0,0,0,45,"秒数だけ記録"],
+ [1,"row","ダンベルロウ","POCKET","reps",1,15,12,10,"腕に付けるのは難しいので、回数は ＋1 ボタンで"],
+ [2,"calf_towel","階段カーフレイズ","FOOT","reps",1,8,0,15,"階段の段差で片脚。スマホは靴下の上から足の甲にバンドで固定"],
+ [2,"bulgarian","椅子スプリットスクワット","THIGH","reps",1,20,0,12,"後ろ足を椅子に。前脚の太ももに固定"],
+ [2,"sl_bridge","片脚ヒップリフト","THIGH","reps",1,12,0,12,"床についている側の太ももに固定。上で2秒止める"],
+ [2,"step_up","階段ステップアップ","THIGH","reps",1,20,0,12,"階段の2段目へ。上がる脚の太ももに固定"],
+ [2,"side_raise","横向き脚上げ","THIGH","reps",1,12,0,15,"上げる脚の太ももに固定"],
+ [2,"wall_sit","空気椅子(壁)","NONE","timer",0,0,0,45,"秒数だけ記録"],
+ [2,"short_foot","ショートフット","NONE","timer",0,0,0,60,"秒数だけ記録"],
+ [2,"side_plank","サイドプランク","NONE","timer",1,0,0,30,"秒数だけ記録"],
+].map(([menu,code,name,mount,kind,single,minAmp,kg,target,hint],i)=>({i,menu,code,name,mount,kind,single:!!single,minAmp,kg,target,hint}));
+
+// ---------- 回数を数える処理(本体版 RepDetector.h と同じ) ----------
+class RepDetector{
+  constructor(minAmp,minRepSec=0.8){this.minAmp=minAmp;this.minRepSec=minRepSec;this.reset()}
+  reset(){this.lp=null;this.ref=null;this.refSum=[0,0,0];this.refN=0;this.up=false;this.reps=0;this.peak=0;this.peakSum=0;this.lastRepT=-1e9;this.angle=0}
+  static norm(v){const n=Math.hypot(v[0],v[1],v[2]);if(n<1e-3)return null;return[v[0]/n,v[1]/n,v[2]/n]}
+  hi(){if(this.reps===0||this.peakSum<=0)return this.minAmp;const h=0.5*this.peakSum/this.reps;return Math.max(h,this.minAmp*0.8)}
+  // a: 加速度[g](重力込み)、t: 秒。1回数えたら true
+  update(a,t){
+    const k=0.3;
+    if(!this.lp)this.lp=a.slice();
+    for(let j=0;j<3;j++)this.lp[j]+=k*(a[j]-this.lp[j]);
+    const g=RepDetector.norm(this.lp);if(!g)return false;
+    if(!this.ref){for(let j=0;j<3;j++)this.refSum[j]+=g[j];if(++this.refN>=25)this.ref=RepDetector.norm(this.refSum);return false}
+    let d=g[0]*this.ref[0]+g[1]*this.ref[1]+g[2]*this.ref[2];d=Math.min(1,Math.max(-1,d));
+    this.angle=Math.acos(d)*57.29578;
+    const hi=this.hi(),lo=hi*0.4;
+    if(!this.up){
+      if(this.angle<lo){for(let j=0;j<3;j++)this.ref[j]+=0.01*(g[j]-this.ref[j]);this.ref=RepDetector.norm(this.ref)}
+      if(this.angle>hi){this.up=true;this.peak=this.angle}
+    }else{
+      if(this.angle>this.peak)this.peak=this.angle;
+      if(this.angle<lo){this.up=false;if(t-this.lastRepT>=this.minRepSec){this.lastRepT=t;this.reps++;this.peakSum+=this.peak;return true}}
+    }
+    return false;
+  }
+  avgPeak(){return this.reps>0?this.peakSum/this.reps:0}
+}
+
+// ---------- 保存(このスマホの中) ----------
+const store={
+  get(k,d){try{const v=localStorage.getItem("rc_"+k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem("rc_"+k,JSON.stringify(v))}catch(e){}}
+};
+let state={menu:store.get("menu",0),ex:null,weights:store.get("weights",{}),sets:{},day:""};
+let log=store.get("log",[]); // {line, sent, t, name, set, kg, val}
+const settings=Object.assign({url:"",token:"",auto:true},store.get("settings",{}));
+
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,"0");
+function stamp(d,compact){const D=`${d.getFullYear()}${compact?"":"-"}${pad(d.getMonth()+1)}${compact?"":"-"}${pad(d.getDate())}`,T=`${pad(d.getHours())}${compact?"":":"}${pad(d.getMinutes())}${compact?"":":"}${pad(d.getSeconds())}`;return D+(compact?"":" ")+T}
+function today(){return stamp(new Date(),false).slice(0,10)}
+
+// セット番号と左右は日ごとにリセット
+function setInfo(ex){
+  const key=today();
+  if(state.day!==key){state.day=key;state.sets=store.get("sets_"+key,{})}
+  return state.sets[ex.i]||{n:1,side:0};
+}
+function advanceSet(ex){
+  const s=setInfo(ex);
+  if(ex.single&&s.side===0)s.side=1;else{s.side=0;s.n++}
+  state.sets[ex.i]=s;store.set("sets_"+state.day,state.sets);
+}
+const kgOf=ex=>state.weights[ex.i]??ex.kg;
+
+// ---------- 音と振動 ----------
+let actx=null;
+function beep(hz,ms){
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();
+    o.frequency.value=hz;g.gain.value=0.15;o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+ms/1000)}catch(e){}
+  try{navigator.vibrate&&navigator.vibrate(Math.min(ms,200))}catch(e){}
+}
+
+// ---------- 画面 ----------
+function renderTabs(){
+  $("tabs").innerHTML="";
+  MENUS.forEach((m,i)=>{const b=document.createElement("button");b.type="button";b.textContent=m.label;b.setAttribute("aria-pressed",i===state.menu);
+    b.onclick=()=>{if(run)return;state.menu=i;store.set("menu",i);state.ex=null;render()};$("tabs").appendChild(b)});
+}
+function renderSelect(){
+  const sel=$("exSelect");sel.innerHTML="";
+  EX.filter(e=>e.menu===state.menu).forEach(e=>{const o=document.createElement("option");o.value=e.i;o.textContent=e.name;sel.appendChild(o)});
+  if(state.ex==null||EX[state.ex].menu!==state.menu)state.ex=+sel.options[0].value;
+  sel.value=state.ex;sel.disabled=!!run;
+}
+function render(){
+  renderTabs();renderSelect();
+  const ex=EX[state.ex],s=setInfo(ex);
+  $("meta").innerHTML="";
+  const chips=[[ex.kind==="timer"?"タイマー":"取り付け: "+MOUNT[ex.mount],"chip mount"],["セット "+s.n+(ex.single?(s.side?"・右":"・左"):""),"chip"]];
+  chips.forEach(([t,c])=>{const sp=document.createElement("span");sp.className=c;sp.textContent=t;$("meta").appendChild(sp)});
+  $("hint").textContent=ex.hint;
+  $("weightRow").hidden=ex.kind!=="reps";
+  $("wOut").textContent=kgOf(ex).toFixed(1)+" kg";
+  if(!run){$("big").textContent="0";$("big").className="big idle";$("sub").textContent=(ex.kind==="timer"?"目標 "+ex.target+" 秒":"目標 "+ex.target+" 回");$("angleBar").style.width="0"}
+  $("mainBtn").textContent=run?(run.phase==="count"?"3…":"FINISH"):"START";
+  $("mainBtn").classList.toggle("stop",!!run);
+  $("minusBtn").disabled=$("plusBtn").disabled=!(run&&ex.kind==="reps");
+  renderLog();
+}
+function renderLog(){
+  const day=today(),rows=log.filter(r=>r.line.split(",")[1].startsWith(day));
+  $("logBody").innerHTML="";
+  rows.slice().reverse().forEach(r=>{const tr=document.createElement("tr");
+    [r.line.split(",")[1].slice(11,16),r.name,r.set,r.kg||"",r.val].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td)});$("logBody").appendChild(tr)});
+  if(!rows.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=5;td.textContent="まだ記録はありません。STARTで1セット目を始めます。";td.style.color="var(--muted)";tr.appendChild(td);$("logBody").appendChild(tr)}
+  const n=log.filter(r=>!r.sent).length;
+  $("unsent").textContent=n?`未送信 ${n} セット`+(settings.url?"":"(送信先が未設定です)"):"すべて送信済み";
+}
+
+// ---------- センサー ----------
+let run=null; // {phase, det, t0, ex, gotMotion}
+function onMotion(ev){
+  if(!run)return;
+  const a=ev.accelerationIncludingGravity;if(!a||a.x==null)return;
+  run.gotMotion=true;
+  if(run.phase!=="active"||run.ex.kind!=="reps")return;
+  const t=performance.now()/1000;
+  if(run.det.update([a.x/9.81,a.y/9.81,a.z/9.81],t)){beep(1800,40);$("big").textContent=run.det.reps;checkTarget()}
+  $("angleBar").style.width=Math.min(100,run.det.angle/Math.max(run.det.hi()*2,1)*100)+"%";
+}
+async function askMotion(){
+  // iPhone は許可のダイアログが必要(ボタンを押したときにしか出せない)
+  if(typeof DeviceMotionEvent!=="undefined"&&typeof DeviceMotionEvent.requestPermission==="function"){
+    try{const r=await DeviceMotionEvent.requestPermission();if(r!=="granted"){$("status").textContent="動きセンサーが許可されませんでした。iPhoneの設定 → Safari → 「モーションと画面の向きのアクセス」をオンにしてください。";return false}}catch(e){}
+  }
+  return true;
+}
+let wake=null;
+async function keepAwake(on){try{if(on&&navigator.wakeLock)wake=await navigator.wakeLock.request("screen");else if(wake){await wake.release();wake=null}}catch(e){}}
+
+function checkTarget(){
+  if(!run||run.targetDone)return;
+  const ex=run.ex,v=ex.kind==="reps"?run.det.reps:Math.floor((performance.now()-run.t0)/1000);
+  if(v>=ex.target){run.targetDone=true;beep(2600,350)}
+}
+let tick=null;
+async function start(){
+  const ex=EX[state.ex];
+  if(ex.kind==="reps"&&!(await askMotion())){}
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume&&actx.resume()}catch(e){}
+  run={phase:"count",ex,det:new RepDetector(ex.minAmp),t0:performance.now(),gotMotion:false,manual:0};
+  $("status").textContent=ex.kind==="reps"?"スタートの姿勢で止まってください":"";
+  keepAwake(true);render();
+  let left=3;$("big").className="big";$("big").textContent=left;beep(1200,60);
+  tick=setInterval(()=>{
+    if(!run)return;
+    if(run.phase==="count"){left--;if(left>0){$("big").textContent=left;beep(1200,60);return}
+      run.phase="active";run.t0=performance.now();run.det.reset();beep(2200,250);
+      $("big").textContent="0";$("status").textContent="";render();
+      if(ex.kind==="reps")setTimeout(()=>{if(run&&!run.gotMotion)$("status").textContent="動きセンサーの値が届いていません。回数は ＋1 ボタンで数えてください。"},1500);
+      return}
+    if(ex.kind==="timer"){$("big").textContent=Math.floor((performance.now()-run.t0)/1000);checkTarget()}
+    $("sub").textContent=ex.kind==="timer"?"目標 "+ex.target+" 秒":"目標 "+ex.target+" 回 ・ "+Math.round(run.det.angle)+"°";
+  },ex.kind==="timer"?250:1000);
+  // カウントダウン中は1秒ごと、計測中の表示更新はセンサー側で行う
+}
+function finish(){
+  const r=run;clearInterval(tick);run=null;keepAwake(false);
+  if(r.phase!=="active"){render();return} // カウントダウン中なら取り消し
+  const ex=r.ex,s=setInfo(ex),now=new Date();
+  const secs=Math.round((performance.now()-r.t0)/1000),reps=ex.kind==="reps"?r.det.reps:0;
+  const side=ex.single?(s.side?"R":"L"):"",kg=ex.kind==="reps"?kgOf(ex):0;
+  const id=`${stamp(now,true)}-${ex.code}-${s.n}${side}`;
+  const line=[id,stamp(now,false),ex.code,side,s.n,kg.toFixed(1),reps,secs,Math.round(r.det.avgPeak()),MENUS[ex.menu].code].join(",");
+  log.push({line,sent:false,name:ex.name+(side?(side==="L"?" 左":" 右"):""),set:s.n,kg:kg?kg.toFixed(1):"",val:ex.kind==="reps"?reps+"回":secs+"秒"});
+  store.set("log",log.slice(-500));
+  advanceSet(ex);beep(900,120);
+  $("status").textContent=`保存しました(${ex.kind==="reps"?reps+"回":secs+"秒"})`;
+  render();
+  if(settings.auto&&settings.url)send(true);
+}
+
+// ---------- 送信(Google Apps Script → スプレッドシート) ----------
+async function send(quiet){
+  const pending=log.filter(r=>!r.sent);
+  if(!pending.length){if(!quiet)$("status").textContent="送るものはありません";return}
+  if(!settings.url){if(!quiet){$("status").textContent="先に「送信先の設定」をしてください";$("settings").showModal()}return}
+  try{
+    // Apps Script は応答を読めない形(no-cors)で送る。同じセットはシート側で重複を除くので、送り直しても安全
+    await fetch(settings.url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({token:settings.token,rows:pending.map(r=>r.line)})});
+    pending.forEach(r=>r.sent=true);store.set("log",log.slice(-500));
+    $("status").textContent=`${pending.length} セットを送信しました`;
+  }catch(e){if(!quiet)$("status").textContent="送信できませんでした。電波のある場所で「送信」を押してください。"}
+  renderLog();
+}
+
+// ---------- 操作 ----------
+$("exSelect").onchange=e=>{state.ex=+e.target.value;$("status").textContent="";render()};
+$("wMinus").onclick=()=>{const ex=EX[state.ex];state.weights[ex.i]=Math.max(0,kgOf(ex)-2.5);store.set("weights",state.weights);render()};
+$("wPlus").onclick=()=>{const ex=EX[state.ex];state.weights[ex.i]=kgOf(ex)+2.5;store.set("weights",state.weights);render()};
+$("mainBtn").onclick=()=>{run?finish():start()};
+$("minusBtn").onclick=()=>{if(run&&run.phase==="active"){run.det.reps=Math.max(0,run.det.reps-1);$("big").textContent=run.det.reps}};
+$("plusBtn").onclick=()=>{if(run&&run.phase==="active"){run.det.reps++;$("big").textContent=run.det.reps;checkTarget()}};
+$("sendBtn").onclick=()=>send(false);
+$("settingsBtn").onclick=()=>{$("gasUrl").value=settings.url;$("gasToken").value=settings.token;$("autoSend").checked=settings.auto;$("settings").showModal()};
+$("settingsForm").addEventListener("submit",e=>{
+  if(e.submitter&&e.submitter.value==="save"){settings.url=$("gasUrl").value.trim();settings.token=$("gasToken").value.trim();settings.auto=$("autoSend").checked;store.set("settings",settings);renderLog()}
+});
+window.addEventListener("devicemotion",onMotion);
+document.addEventListener("visibilitychange",()=>{if(run&&document.visibilityState==="visible")keepAwake(true)});
+window.addEventListener("online",()=>{if(settings.auto&&settings.url)send(true)});
+render();
+</script>
+</body>
+</html>
