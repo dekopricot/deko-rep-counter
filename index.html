@@ -162,26 +162,34 @@ const EX=[
 
 // ---------- 回数を数える処理(本体版 RepDetector.h と同じ) ----------
 class RepDetector{
+  // 本体版 RepDetector.h と同じ処理。谷から h 以上傾いて、山から h 以上戻ったら1回。
+  // 止まった姿勢で基準を取り直すので、スタート直後に構え直しても、持ち方が少し変わっても数えられる。
   constructor(minAmp,minRepSec=0.8){this.minAmp=minAmp;this.minRepSec=minRepSec;this.reset()}
-  reset(){this.lp=null;this.ref=null;this.refSum=[0,0,0];this.refN=0;this.up=false;this.reps=0;this.peak=0;this.peakSum=0;this.lastRepT=-1e9;this.angle=0}
+  reset(){this.lp=null;this.ref=null;this.refSum=[0,0,0];this.refN=0;this.up=false;this.reps=0;this.peak=0;this.valley=0;this.peakSum=0;this.lastRepT=-1e9;this.angle=0;this.still=null;this.stillSince=0}
   static norm(v){const n=Math.hypot(v[0],v[1],v[2]);if(n<1e-3)return null;return[v[0]/n,v[1]/n,v[2]/n]}
-  hi(){if(this.reps===0||this.peakSum<=0)return this.minAmp;const h=0.5*this.peakSum/this.reps;return Math.max(h,this.minAmp*0.8)}
+  static ang(a,b){let d=a[0]*b[0]+a[1]*b[1]+a[2]*b[2];d=Math.min(1,Math.max(-1,d));return Math.acos(d)*57.29578}
+  hi(){if(this.reps===0||this.peakSum<=0)return this.minAmp;return Math.max(0.5*this.peakSum/this.reps,this.minAmp*0.8)}
   // a: 加速度[g](重力込み)、t: 秒。1回数えたら true
   update(a,t){
-    const k=0.3;
     if(!this.lp)this.lp=a.slice();
-    for(let j=0;j<3;j++)this.lp[j]+=k*(a[j]-this.lp[j]);
+    for(let j=0;j<3;j++)this.lp[j]+=0.3*(a[j]-this.lp[j]);
     const g=RepDetector.norm(this.lp);if(!g)return false;
-    if(!this.ref){for(let j=0;j<3;j++)this.refSum[j]+=g[j];if(++this.refN>=25)this.ref=RepDetector.norm(this.refSum);return false}
-    let d=g[0]*this.ref[0]+g[1]*this.ref[1]+g[2]*this.ref[2];d=Math.min(1,Math.max(-1,d));
-    this.angle=Math.acos(d)*57.29578;
-    const hi=this.hi(),lo=hi*0.4;
+    if(!this.still||RepDetector.ang(g,this.still)>2.5){this.still=g;this.stillSince=t}
+    const stillFor=t-this.stillSince;
+    if(!this.ref){for(let j=0;j<3;j++)this.refSum[j]+=g[j];if(++this.refN>=25){this.ref=RepDetector.norm(this.refSum);this.valley=0}return false}
+    this.angle=RepDetector.ang(g,this.ref);
+    const h=this.hi();
     if(!this.up){
-      if(this.angle<lo){for(let j=0;j<3;j++)this.ref[j]+=0.01*(g[j]-this.ref[j]);this.ref=RepDetector.norm(this.ref)}
-      if(this.angle>hi){this.up=true;this.peak=this.angle}
+      if(this.angle<this.valley)this.valley=this.angle;
+      if(this.angle-this.valley<h*0.3){for(let j=0;j<3;j++)this.ref[j]+=0.03*(g[j]-this.ref[j]);this.ref=RepDetector.norm(this.ref)}
+      if(stillFor>=0.6){this.ref=g.slice();this.angle=0;this.valley=0}
+      if(this.angle-this.valley>h){this.up=true;this.peak=this.angle}
     }else{
       if(this.angle>this.peak)this.peak=this.angle;
-      if(this.angle<lo){this.up=false;if(t-this.lastRepT>=this.minRepSec){this.lastRepT=t;this.reps++;this.peakSum+=this.peak;return true}}
+      if(this.peak-this.angle>h){
+        this.up=false;const rise=this.peak-this.valley;this.valley=this.angle;
+        if(t-this.lastRepT>=this.minRepSec){this.lastRepT=t;this.reps++;this.peakSum+=rise;return true}
+      }else if(stillFor>=5){this.up=false;this.ref=g.slice();this.angle=0;this.valley=0}
     }
     return false;
   }
@@ -270,6 +278,7 @@ function onMotion(ev){
   const t=performance.now()/1000;
   if(run.det.update([a.x/9.81,a.y/9.81,a.z/9.81],t)){beep(1800,40);$("big").textContent=run.det.reps;checkTarget()}
   $("angleBar").style.width=Math.min(100,run.det.angle/Math.max(run.det.hi()*2,1)*100)+"%";
+  if(t-(run.lastSub||0)>0.2){run.lastSub=t;$("sub").textContent="目標 "+run.ex.target+" 回 ・ "+Math.round(run.det.angle)+"°"}
 }
 async function askMotion(){
   // iPhone は許可のダイアログが必要(ボタンを押したときにしか出せない)
