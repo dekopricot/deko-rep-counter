@@ -38,6 +38,16 @@ select,input{font:inherit;color:var(--fg);background:var(--panel);border:1px sol
 .chip{border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--panel)}
 .chip.mount{color:var(--fg);font-weight:600}
 .hint{font-size:13px;color:var(--muted);margin:0}
+.mountrow{display:flex;gap:12px;align-items:center}
+.mountrow .hint{min-width:0;flex:1}
+.pic{flex:0 0 88px;height:88px;border:1px solid var(--line);border-radius:12px;background:var(--panel);display:grid;place-items:center}
+.pic svg{width:80px;height:80px}
+.pic .leg{fill:var(--line);stroke:var(--muted);stroke-width:1.2}
+.pic .band{fill:var(--accent);opacity:.35}
+.pic .phone{fill:var(--accent);stroke:var(--panel);stroke-width:1.5}
+.pic .lbl{fill:var(--fg);font:600 9px var(--body)}
+.pic .ring{fill:none;stroke:var(--muted);stroke-width:5}
+.pic .hand{fill:var(--accent)}
 .weight{display:grid;grid-template-columns:52px 1fr 52px;gap:8px;align-items:center}
 .weight button{height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:700 22px var(--display)}
 .weight output{text-align:center;font:700 26px var(--display);font-variant-numeric:tabular-nums}
@@ -58,6 +68,9 @@ section.log{display:flex;flex-direction:column;gap:8px}
 .loghead h2{font:700 18px var(--display);letter-spacing:.05em;margin:0;text-transform:uppercase}
 table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+td.act{text-align:right;color:var(--muted);font-size:12px;white-space:nowrap}
+button.del{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px}
+button.del.armed{background:var(--warn);border-color:var(--warn);color:var(--bg)}
 th{color:var(--muted);font-weight:400}
 .tablewrap{overflow-x:auto}
 dialog{border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--fg);width:min(440px,calc(100% - 32px));padding:18px}
@@ -83,7 +96,10 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
   <div class="ex">
     <select id="exSelect" aria-label="種目"></select>
     <div class="meta" id="meta"></div>
-    <p class="hint" id="hint"></p>
+    <div class="mountrow">
+      <div class="pic" id="mountPic" aria-hidden="true"></div>
+      <p class="hint" id="hint"></p>
+    </div>
   </div>
 
   <div class="weight" id="weightRow">
@@ -112,7 +128,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
     </div>
     <p class="hint" id="unsent"></p>
     <div class="tablewrap"><table>
-      <thead><tr><th>時刻</th><th>種目</th><th>セット</th><th>kg</th><th>回/秒</th></tr></thead>
+      <thead><tr><th>時刻</th><th>種目</th><th>セット</th><th>kg</th><th>回/秒</th><th></th></tr></thead>
       <tbody id="logBody"></tbody>
     </table></div>
   </section>
@@ -126,8 +142,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
     <label>TOKEN(Apps Scriptと同じ文字列)
       <input id="gasToken" type="text" autocomplete="off"></label>
     <label style="flex-direction:row;align-items:center;gap:8px;color:var(--fg)">
-      <input id="autoSend" type="checkbox" style="width:auto"> セットを保存するたびに自動で送る</label>
-    <p class="hint">この設定はこのスマホの中だけに保存されます。</p>
+      <input id="autoSend" type="checkbox" style="width:auto"> セットを保存したら自動で送る(60秒後)</label>
+    <p class="hint">自動で送るのは、最後にセットを保存してから60秒後です。その間なら、記録の「削除」で間違えたセットを送らずに消せます。この設定はこのスマホの中だけに保存されます。</p>
     <div class="row"><button value="cancel" type="submit">閉じる</button><button class="ok" value="save" type="submit" id="saveSettings">保存</button></div>
   </form>
 </dialog>
@@ -159,6 +175,16 @@ const EX=[
  [2,"short_foot","ショートフット","NONE","timer",0,0,0,60,"秒数だけ記録"],
  [2,"side_plank","サイドプランク","NONE","timer",1,0,0,30,"秒数だけ記録"],
 ].map(([menu,code,name,mount,kind,single,minAmp,kg,target,hint],i)=>({i,menu,code,name,mount,kind,single:!!single,minAmp,kg,target,hint}));
+
+
+// ---------- 取り付け位置の絵(横から見た右脚。つま先が右) ----------
+const LEG='<path class="leg" d="M34,4 L56,4 L58,30 L59,52 Q60,58 57,64 L55,90 L62,95 L82,99 Q86,101 84,106 L44,106 Q39,105 40,99 L40,88 L38,64 Q35,56 36,48 Z"/>';
+const PICS={
+  THIGH:'<svg viewBox="0 0 100 110">'+LEG+'<rect class="band" x="36" y="40" width="26" height="7" rx="2"/><rect class="phone" x="56" y="32" width="11" height="22" rx="2.5"/><text class="lbl" x="70" y="46">ここ</text></svg>',
+  FOOT:'<svg viewBox="0 0 100 110">'+LEG+'<rect class="band" x="62" y="90" width="7" height="17" rx="2" transform="rotate(12 65 98)"/><rect class="phone" x="56" y="86" width="22" height="8" rx="2.5" transform="rotate(12 67 90)"/><text class="lbl" x="66" y="78">ここ</text></svg>',
+  POCKET:'<svg viewBox="0 0 100 110">'+LEG+'<rect class="phone" x="41" y="16" width="11" height="20" rx="2.5"/><text class="lbl" x="58" y="26">ポケット</text></svg>',
+  NONE:'<svg viewBox="0 0 100 110"><circle class="ring" cx="50" cy="60" r="30"/><rect class="hand" x="46" y="18" width="8" height="10" rx="2"/><line x1="50" y1="60" x2="50" y2="40" stroke="var(--accent)" stroke-width="5" stroke-linecap="round"/><line x1="50" y1="60" x2="64" y2="66" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/></svg>'
+};
 
 // ---------- 回数を数える処理(本体版 RepDetector.h と同じ) ----------
 class RepDetector{
@@ -250,6 +276,7 @@ function render(){
   const chips=[[ex.kind==="timer"?"タイマー":"取り付け: "+MOUNT[ex.mount],"chip mount"],["セット "+s.n+(ex.single?(s.side?"・右":"・左"):""),"chip"]];
   chips.forEach(([t,c])=>{const sp=document.createElement("span");sp.className=c;sp.textContent=t;$("meta").appendChild(sp)});
   $("hint").textContent=ex.hint;
+  $("mountPic").innerHTML=PICS[ex.mount]||PICS.NONE;
   $("weightRow").hidden=ex.kind!=="reps";
   $("wOut").textContent=kgOf(ex).toFixed(1)+" kg";
   if(!run){$("big").textContent="0";$("big").className="big idle";$("sub").textContent=(ex.kind==="timer"?"目標 "+ex.target+" 秒":"目標 "+ex.target+" 回");$("angleBar").style.width="0"}
@@ -262,10 +289,29 @@ function renderLog(){
   const day=today(),rows=log.filter(r=>r.line.split(",")[1].startsWith(day));
   $("logBody").innerHTML="";
   rows.slice().reverse().forEach(r=>{const tr=document.createElement("tr");
-    [r.line.split(",")[1].slice(11,16),r.name,r.set,r.kg||"",r.val].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td)});$("logBody").appendChild(tr)});
-  if(!rows.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=5;td.textContent="まだ記録はありません。STARTで1セット目を始めます。";td.style.color="var(--muted)";tr.appendChild(td);$("logBody").appendChild(tr)}
+    [r.line.split(",")[1].slice(11,16),r.name,r.set,r.kg||"",r.val].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td)});
+    const td=document.createElement("td");td.className="act";
+    if(r.sent){td.textContent="送信済";}
+    else{const b=document.createElement("button");b.type="button";b.className="del";const armed=pendingDelete===r.line;
+      b.textContent=armed?"削除する":"削除";b.classList.toggle("armed",armed);b.setAttribute("aria-label",r.name+" セット"+r.set+"を削除");
+      b.onclick=()=>deleteRow(r.line);td.appendChild(b)}
+    tr.appendChild(td);$("logBody").appendChild(tr)});
+  if(!rows.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=6;td.textContent="まだ記録はありません。STARTで1セット目を始めます。";td.style.color="var(--muted)";tr.appendChild(td);$("logBody").appendChild(tr)}
   const n=log.filter(r=>!r.sent).length;
   $("unsent").textContent=n?`未送信 ${n} セット`+(settings.url?"":"(送信先が未設定です)"):"すべて送信済み";
+}
+
+// ---------- 未送信のセットを消す(1回目で「削除する」に変わり、もう一度押すと消える) ----------
+let pendingDelete=null,pendingTimer=null;
+function deleteRow(line){
+  if(pendingDelete!==line){pendingDelete=line;clearTimeout(pendingTimer);pendingTimer=setTimeout(()=>{pendingDelete=null;renderLog()},4000);renderLog();return}
+  clearTimeout(pendingTimer);pendingDelete=null;
+  const i=log.findIndex(r=>r.line===line&&!r.sent);if(i<0){renderLog();return}
+  const r=log[i];log.splice(i,1);store.set("log",log.slice(-500));
+  // その種目のいちばん新しいセットを消したときは、セット番号と左右を戻す
+  if(r.ex!=null&&!log.some(x=>x.ex===r.ex&&x.line.split(",")[1]>r.line.split(",")[1])){
+    const ex=EX[r.ex];setInfo(ex);state.sets[ex.i]={n:r.set,side:r.sideIdx||0};store.set("sets_"+state.day,state.sets)}
+  $("status").textContent=`${r.name} セット${r.set} を削除しました`;render();
 }
 
 // ---------- センサー ----------
@@ -324,15 +370,18 @@ function finish(){
   const side=ex.single?(s.side?"R":"L"):"",kg=ex.kind==="reps"?kgOf(ex):0;
   const id=`${stamp(now,true)}-${ex.code}-${s.n}${side}`;
   const line=[id,stamp(now,false),ex.code,side,s.n,kg.toFixed(1),reps,secs,Math.round(r.det.avgPeak()),MENUS[ex.menu].code].join(",");
-  log.push({line,sent:false,name:ex.name+(side?(side==="L"?" 左":" 右"):""),set:s.n,kg:kg?kg.toFixed(1):"",val:ex.kind==="reps"?reps+"回":secs+"秒"});
+  log.push({line,sent:false,ex:ex.i,sideIdx:s.side,name:ex.name+(side?(side==="L"?" 左":" 右"):""),set:s.n,kg:kg?kg.toFixed(1):"",val:ex.kind==="reps"?reps+"回":secs+"秒"});
   store.set("log",log.slice(-500));
   advanceSet(ex);beep(900,120);
   $("status").textContent=`保存しました(${ex.kind==="reps"?reps+"回":secs+"秒"})`;
   render();
-  if(settings.auto&&settings.url)send(true);
+  scheduleAutoSend();
 }
 
 // ---------- 送信(Google Apps Script → スプレッドシート) ----------
+// 自動送信は最後の保存から60秒待つ。その間なら間違えたセットを送る前に消せる
+let autoTimer=null;
+function scheduleAutoSend(){clearTimeout(autoTimer);if(settings.auto&&settings.url)autoTimer=setTimeout(()=>{if(!run)send(true);else scheduleAutoSend()},60000)}
 async function send(quiet){
   const pending=log.filter(r=>!r.sent);
   if(!pending.length){if(!quiet)$("status").textContent="送るものはありません";return}
@@ -361,7 +410,7 @@ $("settingsForm").addEventListener("submit",e=>{
 });
 window.addEventListener("devicemotion",onMotion);
 document.addEventListener("visibilitychange",()=>{if(run&&document.visibilityState==="visible")keepAwake(true)});
-window.addEventListener("online",()=>{if(settings.auto&&settings.url)send(true)});
+window.addEventListener("online",scheduleAutoSend);
 render();
 </script>
 </body>
